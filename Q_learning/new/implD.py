@@ -14,7 +14,7 @@ duration_categories = [0, 100, 500, 1000, 2000,3000,4000,5000,6000]  # Define du
 
 Q_shape = (len(memory_sizes) * len(timeouts) * len(duration_categories), 6)
 q_table_file_path = 'q_table.npy'
-
+state_data_path='qstate.txt'
 
 
 alpha = 0.1
@@ -103,7 +103,8 @@ logs_client = boto3.client('logs')
 bucket_name = 'x22203389-ric'
 folder_path = '51000/'
 s3_objects = helper.get_image_list_from_s3(s3_client,bucket_name,folder_path)
-
+# Initialize the results dictionary
+results = []
 for episode in range(num_episodes):
     try:
         memory, timeout = 512, 5  # Initial configuration
@@ -119,6 +120,16 @@ for episode in range(num_episodes):
             'object_key': object_key
         }
         
+        res= {
+            'episodes': episode,
+            'execution_times': [],
+            'memory_usages': [],
+            'costs': [],
+            'rewards': [],
+            'memory_configurations': [],
+            'timeout_configurations': []
+        }
+
         for step in range(10):
             action = choose_action(state, Q)
             new_memory, new_timeout = execute_action(memory, timeout, action)
@@ -166,14 +177,34 @@ for episode in range(num_episodes):
                 
                 memory, timeout = adjust_configuration_based_on_performance(metrics, new_memory, new_timeout)
                 state = new_state
-        
+                res['execution_times'].append(duration)
+                res['memory_usages'].append(max_memory_used)
+                res['costs'].append(calculate_cost(memory, duration))
+                res['rewards'].append(reward)
+                res['memory_configurations'].append(memory)
+                res['timeout_configurations'].append(timeout)
+         
+        results.append(res)
+
+        print(f'Episode {episode + 1}/{num_episodes} completed.')
+        #print(f'Reward {total_reward}')
+    
+        with open('results_q.json', 'w') as f:
+            json.dump(results, f)
+
+
         print(f'Episode {episode + 1}/{num_episodes} completed.')
         helper.save_q_table(q_table_file_path, Q)
     
     except Exception as e:
         print(f'Exception occurred: {e}')
+        with open('results_q.json', 'w') as f:
+            json.dump(results, f)
+
         helper.save_q_table(q_table_file_path, Q)
         break  
 
+with open('results_q.json', 'w') as f:
+    json.dump(results, f)
 
 helper.save_q_table(q_table_file_path, Q)

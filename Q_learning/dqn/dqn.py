@@ -7,7 +7,7 @@ import boto3
 import json
 import time
 from datetime import datetime, timedelta
-import helper 
+import helper
 # Define the environment and DQN parameters
 memory_sizes = np.arange(128, 3009)  # Continuous memory sizes from 128MB to 3008MB
 timeouts = [1, 2, 3, 5, 10, 15]      # Discrete timeout values
@@ -24,7 +24,7 @@ epsilon_decay = 0.995
 learning_rate = 0.001
 batch_size = 32
 memory_buffer = deque(maxlen=2000)
-num_episodes = 5
+num_episodes = 100
 max_steps_per_episode = 10
 
 # Define the DQN model
@@ -48,39 +48,6 @@ def get_duration_category(duration):
             return i
     return len(duration_categories) - 1
 
-# Function to get the CloudWatch logs
-def get_cloudwatch_logs(log_group_name, start_time, end_time):
-    logs_client = boto3.client('logs')
-    response = logs_client.filter_log_events(
-        logGroupName=log_group_name,
-        startTime=int(start_time.timestamp() * 1000),
-        endTime=int(end_time.timestamp() * 1000),
-        limit=1,
-        interleaved=True
-    )
-    if 'events' in response and response['events']:
-        log_event = response['events'][0]['message']
-        return log_event
-    return None
-
-# Function to parse CloudWatch log events
-def parse_log_event(log_event):
-    parts = log_event.split('\t')
-    metrics = {'out_of_memory': False, 'timed_out': False}
-    for part in parts:
-        if 'Duration' in part:
-            metrics['Duration'] = float(part.split(': ')[1].replace(' ms', ''))
-        elif 'Billed Duration' in part:
-            metrics['Billed Duration'] = float(part.split(': ')[1].replace(' ms', ''))
-        elif 'Memory Size' in part:
-            metrics['Memory Size'] = int(part.split(': ')[1].replace(' MB', ''))
-        elif 'Max Memory Used' in part:
-            metrics['Max Memory Used'] = int(part.split(': ')[1].replace(' MB', ''))
-        if 'Task timed out' in part:
-            metrics['timed_out'] = True
-        if 'fatal error' in part and 'Cannot allocate memory' in part:
-            metrics['out_of_memory'] = True
-    return metrics
 
 def calculate_cost(memory, duration):
     memory = int(memory) 
@@ -115,9 +82,9 @@ def choose_action(state, epsilon):
 # Function to execute action
 def execute_action(memory, timeout, action):
     if action == 0 and memory < 3008:  # Increase memory
-        memory += 1
+        memory += 16
     elif action == 1 and memory > 128:  # Decrease memory
-        memory -= 1
+        memory -= 16
     elif action == 2 and timeout < 15:  # Increase timeout
         timeout = timeouts[timeouts.index(timeout) + 1]
     elif action == 3 and timeout > 1:  # Decrease timeout
@@ -126,6 +93,7 @@ def execute_action(memory, timeout, action):
 
 # Function to replay experiences from the buffer
 def replay(batch_size):
+    global epsilon
     minibatch = random.sample(memory_buffer, batch_size)
     for state, action, reward, next_state, done in minibatch:
         target = reward
@@ -148,9 +116,22 @@ bucket_name = 'x22203389-ric'
 folder_path = '51000/'
 s3_objects = helper.get_image_list_from_s3(s3_client,bucket_name,folder_path)
 
+# Initialize the results dictionary
+results = {
+    'episodes': [],
+    'execution_times': [],
+    'memory_usages': [],
+    'costs': [],
+    'rewards': [],
+    'memory_configurations': [],
+    'timeout_configurations': []
+}
+
+q_table_file_path = 'dqn_table.txt'
+
 for episode in range(num_episodes):
     try:
-        memory, timeout = 512, 5  # Initial configuration
+        memory, timeout = 256, 5  # Initial configuration
         state = [memory, timeout, 0]
         
         # Get a random image from S3 bucket
@@ -162,9 +143,10 @@ for episode in range(num_episodes):
             'bucket_name': bucket_name,
             'object_key': object_key
         }
-        
+        total_reward=0
         for step in range(max_steps_per_episode):
             action = choose_action(state, epsilon)
+            print(f'Action {action}')
             new_memory, new_timeout = execute_action(memory, timeout, action)
             
             # Update Lambda function configuration
@@ -215,17 +197,46 @@ for episode in range(num_episodes):
             
             if len(memory_buffer) > batch_size:
                 replay(batch_size)
+         # Save metrics for this episode
+        results['episodes'].append(episode)
+        results['execution_times'].append(duration)
+        results['memory_usages'].append(max_memory_used)
+        results['costs'].append(calculate_cost(memory, duration))
+        results['rewards'].append(total_reward)
+        results['memory_configurations'].append(memory)
+        results['timeout_configurations'].append(timeout)
         
+        # Save the Q-table to a file
+        # Save the Q-table to a text file
+        with open(q_table_file_path, 'w') as f:
+            for experience in memory_buffer:
+                state, action, reward, next_state, done = experience
+                f.write(f"State: {state}, Action: {action}, Reward: {reward}, Next State: {next_state}, Done: {done}\n")
+
+
         print(f'Episode {episode + 1}/{num_episodes} completed.')
-        
+        print(f'Reward {total_reward}')
         # Update the target model periodically
         if episode % 10 == 0:
             target_model.set_weights(model.get_weights())
             model.save('dqn_model.h5')
     except Exception as e:
         print(f'Exception occurred: {e}')
+        with open(q_table_file_path, 'w') as f:
+            for experience in memory_buffer:
+                state, action, reward, next_state, done = experience
+                f.write(f"State: {state}, Action: {action}, Reward: {reward}, Next State: {next_state}, Done: {done}\n")
+
+
         model.save('dqn_model.h5')
+        # Save the results to a file
+        with open('results.json', 'w') as f:
+            json.dump(results, f)
         break  # Optionally break the loop or continue
 
 # Save the final model
 model.save('dqn_model.h5')
+
+# Save the results to a file
+with open('results.json', 'w') as f:
+    json.dump(results, f)

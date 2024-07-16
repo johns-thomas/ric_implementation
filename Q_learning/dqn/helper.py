@@ -90,8 +90,9 @@ def query_log_stream(logs_client, log_group_name, log_stream_name, retries):
     else:
         if retries > 0:
             print(f"No results found, retrying... ({retries} retries left)")
-            time.sleep(5)  # Wait before retrying
-            return query_log_stream(logs_client, log_group_name, log_stream_name, retries - 1)
+            time.sleep(50)  # Wait before retrying
+            return get_latest_log_stream(logs_client, log_group_name, retries-1)
+            #return query_log_stream(logs_client, log_group_name, log_stream_name, retries - 1)
         else:
             print("No results found after multiple retries.")
             return None
