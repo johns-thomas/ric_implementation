@@ -16,6 +16,9 @@ def load_q_table(file_path,Q_shape):
 def save_q_table(file_path, q_table):
     np.save(file_path, q_table)
 
+
+
+
 def parse_log_event(log_event):
     parts = log_event.split('\t')
     metrics = {'out_of_memory': False, 'timed_out': False}
@@ -44,7 +47,7 @@ def get_latest_log_stream(logs_client, log_group_name, retries):
         descending=True,
         limit=1
     )
-    
+    #print(response)
     if 'logStreams' in response and len(response['logStreams']) > 0:
         latest_log_stream_name = response['logStreams'][0]['logStreamName']
         
@@ -76,7 +79,7 @@ def query_log_stream(logs_client, log_group_name, log_stream_name, retries):
     # Wait for the query to complete
     while True:
         query_status = logs_client.get_query_results(queryId=query_id)
-        print(query_status)
+       # print(query_status)
         if query_status['status'] == 'Complete':
             break
         time.sleep(1)
@@ -93,7 +96,7 @@ def query_log_stream(logs_client, log_group_name, log_stream_name, retries):
     else:
         if retries > 0:
             print(f"No results found, retrying... ({retries} retries left)")
-            time.sleep(50)  # Wait before retrying
+            time.sleep(45)  # Wait before retrying
             return get_latest_log_stream(logs_client, log_group_name, retries-1)
             #return query_log_stream(logs_client, log_group_name, log_stream_name, retries - 1)
         else:

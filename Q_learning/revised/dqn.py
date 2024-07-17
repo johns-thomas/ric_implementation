@@ -6,6 +6,7 @@ from collections import deque
 import boto3
 import json
 import time
+import os
 from datetime import datetime, timedelta
 import helper
 # Define the environment and DQN parameters
@@ -27,6 +28,38 @@ memory_buffer = deque(maxlen=2000)
 num_episodes = 100
 max_steps_per_episode = 10
 
+model_filename = 'dqn_new_model.h5'
+results_file='dqn_results.json'
+q_table_file_path = 'dqn_table.txt'
+target_model_file='target_model.h5'
+# Function to save the model
+def save_model(model, filename):
+    model.save(filename)
+
+# Function to load the model
+def load_model(filename):
+    if os.path.exists(model_filename):
+        return models.load_model(filename)
+       # target_model = load_model(model_filename)
+        #target_model.set_weights(model.get_weights())
+    else:
+        return build_model(state_size, action_size)
+       # target_model = build_model(state_size, action_size)
+        #target_model.set_weights(model.get_weights())
+    #return model
+
+def load_target_model(model,filename):
+    if os.path.exists(model_filename):
+       # model = models.load_model(filename)
+        target_model = models.load_model(filename)
+        target_model.set_weights(model.get_weights())
+        return target_model
+    else:
+        #model = build_model(state_size, action_size)
+        target_model = build_model(state_size, action_size)
+        target_model.set_weights(model.get_weights())
+        return target_model
+
 # Define the DQN model
 def build_model(state_size, action_size):
     model = models.Sequential()
@@ -36,10 +69,9 @@ def build_model(state_size, action_size):
     model.compile(loss='mse', optimizer=optimizers.Adam(learning_rate=learning_rate))
     return model
 
-# Initialize the model
-model = build_model(state_size, action_size)
-target_model = build_model(state_size, action_size)
-target_model.set_weights(model.get_weights())
+model = load_model(model_filename)
+target_model = load_target_model(model,target_model_file)
+
 
 # Function to get the duration category
 def get_duration_category(duration):
@@ -94,6 +126,7 @@ def execute_action(memory, timeout, action):
 # Function to replay experiences from the buffer
 def replay(batch_size):
     global epsilon
+    global model
     minibatch = random.sample(memory_buffer, batch_size)
     for state, action, reward, next_state, done in minibatch:
         target = reward
@@ -116,9 +149,7 @@ bucket_name = 'x22203389-ric'
 folder_path = '51000/'
 s3_objects = helper.get_image_list_from_s3(s3_client,bucket_name,folder_path)
 
-results_file='dqn_results.json'
 
-q_table_file_path = 'dqn_table.txt'
 results = []
 for episode in range(num_episodes):
     try:
@@ -218,7 +249,8 @@ for episode in range(num_episodes):
         # Update the target model periodically
         if episode % 10 == 0:
             target_model.set_weights(model.get_weights())
-            model.save('dqn_model.h5')
+            model.save(model_filename)
+            target_model.save('target_model.h5')
     except Exception as e:
         print(f'Exception occurred: {e}')
         with open(q_table_file_path, 'w') as f:
@@ -227,15 +259,16 @@ for episode in range(num_episodes):
                 f.write(f"State: {state}, Action: {action}, Reward: {reward}, Next State: {next_state}, Done: {done}\n")
 
 
-        model.save('dqn_model.h5')
+        model.save(model_filename)
+        target_model.save('target_model.h5')
         # Save the results to a file
         with open('results.json', 'w') as f:
             json.dump(results, f)
         break  # Optionally break the loop or continue
 
 # Save the final model
-model.save('dqn_model.h5')
-
+model.save(model_filename)
+target_model.save('target_model.h5')
 # Save the results to a file
 with open('results.json', 'w') as f:
     json.dump(results, f)

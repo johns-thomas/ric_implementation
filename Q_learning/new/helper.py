@@ -20,14 +20,17 @@ def parse_log_event(log_event):
     parts = log_event.split('\t')
     metrics = {'out_of_memory': False, 'timed_out': False}
     for part in parts:
-        if 'Duration' in part:
-            metrics['Duration'] = float(part.split(': ')[1].replace(' ms', ''))
-        elif 'Billed Duration' in part:
-            metrics['Billed Duration'] = float(part.split(': ')[1].replace(' ms', ''))
-        elif 'Memory Size' in part:
-            metrics['Memory Size'] = int(part.split(': ')[1].replace(' MB', ''))
-        elif 'Max Memory Used' in part:
-            metrics['Max Memory Used'] = int(part.split(': ')[1].replace(' MB', ''))
+        val=part.split(':')
+        if val[0]=='Duration':
+            metrics['Duration'] = float(val[1].replace(' ms', ''))
+        elif val[0]=='Billed Duration':
+            metrics['Billed Duration'] = float(val[1].replace(' ms', ''))
+        elif val[0]=='Memory Size':
+            metrics['Memory Size'] = int(val[1].replace(' MB', ''))
+        elif val[0]=='Max Memory Used':
+            metrics['Max Memory Used'] = int(val[1].replace(' MB', ''))
+        elif val[0]=='Init Duration' :
+            metrics['Init Duration'] = float(val[1].replace(' ms', ''))
         if 'Task timed out' in part:
             metrics['timed_out'] = True
         if 'fatal error' in part and 'Cannot allocate memory' in part:
@@ -41,7 +44,7 @@ def get_latest_log_stream(logs_client, log_group_name, retries):
         descending=True,
         limit=1
     )
-    print(response)
+    #print(response)
     if 'logStreams' in response and len(response['logStreams']) > 0:
         latest_log_stream_name = response['logStreams'][0]['logStreamName']
         
@@ -73,7 +76,7 @@ def query_log_stream(logs_client, log_group_name, log_stream_name, retries):
     # Wait for the query to complete
     while True:
         query_status = logs_client.get_query_results(queryId=query_id)
-        print(query_status)
+       # print(query_status)
         if query_status['status'] == 'Complete':
             break
         time.sleep(1)
@@ -120,3 +123,6 @@ def get_image_list_from_s3(s3_client,bucket_name, folder_path):
 
     return image_files
 
+def append_results_to_file(results, filename):
+    with open(filename, 'a') as f:
+        f.write(json.dumps(results) + '\n')
