@@ -1,6 +1,8 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import models, layers, optimizers
+from tensorflow.keras import losses
+
 import random
 from collections import deque
 import boto3
@@ -31,7 +33,7 @@ max_steps_per_episode = 10
 model_filename = 'dqn_new_model.h5'
 results_file='dqn_results.json'
 q_table_file_path = 'dqn_table.txt'
-target_model_file='target_model.h5'
+target_model_file= 'dqn_new_model.h5'
 # Function to save the model
 def save_model(model, filename):
     model.save(filename)
@@ -39,7 +41,9 @@ def save_model(model, filename):
 # Function to load the model
 def load_model(filename):
     if os.path.exists(model_filename):
-        return models.load_model(filename)
+        mod=models.load_model(filename)
+        mod.compile(optimizer=optimizers.Adam(learning_rate=learning_rate), loss=losses.MeanSquaredError())
+        return mod
        # target_model = load_model(model_filename)
         #target_model.set_weights(model.get_weights())
     else:
@@ -66,7 +70,7 @@ def build_model(state_size, action_size):
     model.add(layers.Dense(24, input_dim=state_size, activation='relu'))
     model.add(layers.Dense(24, activation='relu'))
     model.add(layers.Dense(action_size, activation='linear'))
-    model.compile(loss='mse', optimizer=optimizers.Adam(learning_rate=learning_rate))
+    model.compile(loss=losses.MeanSquaredError(), optimizer=optimizers.Adam(learning_rate=learning_rate))
     return model
 
 model = load_model(model_filename)
@@ -93,7 +97,7 @@ def calculate_reward(metrics, new_memory, new_timeout):
         return -50  # Penalty for timeouts
     # Reward based on performance and resource usage
     cost = calculate_cost(new_memory, metrics['Duration'])
-    return  - (metrics['Max Memory Used'] / 1024) - new_timeout-cost
+    return  - (metrics['Max Memory Used'] / 1024) -cost
 
 # Function to adjust configuration based on performance
 def adjust_configuration_based_on_performance(metrics, memory, timeout):
@@ -138,6 +142,14 @@ def replay(batch_size):
     if epsilon > epsilon_min:
         epsilon *= epsilon_decay
 
+def get_random_initial_configuration():
+    memory, timeout = 256, 5 
+    if np.random.rand() < epsilon:
+        memory = np.random.choice(memory_sizes)
+        timeout = np.random.choice(timeouts)
+    return memory, timeout
+
+
 # Training Loop
 s3_client = boto3.client('s3')
 lambda_client = boto3.client('lambda')
@@ -145,15 +157,15 @@ logs_client = boto3.client('logs')
 log_group_name = '/aws/lambda/x22203389-ric-resize'
 func_name='x22203389-ric-resize'
 
-bucket_name = 'x22203389-ric'
+bucket_name = 'x22203389-imageset'
 folder_path = '51000/'
 s3_objects = helper.get_image_list_from_s3(s3_client,bucket_name,folder_path)
 
 
 results = []
-for episode in range(num_episodes):
+for episode in range(11,num_episodes):
     try:
-        memory, timeout = 256, 5  # Initial configuration
+        memory, timeout = get_random_initial_configuration()  # Initial configuration
         state = [memory, timeout, 0]
         
         # Get a random image from S3 bucket
@@ -249,8 +261,8 @@ for episode in range(num_episodes):
         # Update the target model periodically
         if episode % 10 == 0:
             target_model.set_weights(model.get_weights())
-            model.save(model_filename)
-            target_model.save('target_model.h5')
+            model.save(model_filename,include_optimizer=False)
+            target_model.save('target_model.h5',include_optimizer=False)
     except Exception as e:
         print(f'Exception occurred: {e}')
         with open(q_table_file_path, 'w') as f:
@@ -259,15 +271,15 @@ for episode in range(num_episodes):
                 f.write(f"State: {state}, Action: {action}, Reward: {reward}, Next State: {next_state}, Done: {done}\n")
 
 
-        model.save(model_filename)
-        target_model.save('target_model.h5')
+        model.save(model_filename,include_optimizer=False)
+        target_model.save('target_model.h5',include_optimizer=False)
         # Save the results to a file
         with open('results.json', 'w') as f:
             json.dump(results, f)
         break  # Optionally break the loop or continue
 
 # Save the final model
-model.save(model_filename)
+model.save(model_filename,include_optimizer=False)
 target_model.save('target_model.h5')
 # Save the results to a file
 with open('results.json', 'w') as f:
