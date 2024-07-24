@@ -106,7 +106,7 @@ folder_path = '51000/'
 s3_objects = helper.get_image_list_from_s3(s3_client,bucket_name,folder_path)
 # Initialize the results dictionary
 results = []
-for episode in range(39,num_episodes):
+for episode in range(78,num_episodes):
     try:
         memory, timeout = 512, 5  # Initial configuration
         state = get_state_index(memory, timeout, 0)
