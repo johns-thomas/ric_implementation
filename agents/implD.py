@@ -15,11 +15,11 @@ duration_categories = [i for i in range(0, 150001, 500)]  # Define duration cate
 Q_shape = (len(memory_sizes) * len(timeouts) * len(duration_categories), 6)
 q_table_file_path = 'q_table-new.npy'
 state_data_path='qstate-new.txt'
-results_file='results_q.json'
+results_file='new_results_q.json'
 
 alpha = 0.1
 gamma = 0.9
-epsilon = 0.1
+epsilon = 0.01
 num_episodes = 1000
 
 log_group_name ='/aws/lambda/x22203389-ric-rotation'
@@ -106,7 +106,7 @@ folder_path = '51000/'
 s3_objects = helper.get_image_list_from_s3(s3_client,bucket_name,folder_path)
 # Initialize the results dictionary
 results = []
-for episode in range(78,num_episodes):
+for episode in range(1,num_episodes):
     try:
         memory, timeout = 512, 5  # Initial configuration
         state = get_state_index(memory, timeout, 0)
@@ -190,7 +190,7 @@ for episode in range(78,num_episodes):
         print(f'Episode {episode + 1}/{num_episodes} completed.')
         #print(f'Reward {total_reward}')
     
-        helper.append_results_to_file(res,'resnew.json')
+        helper.append_results_to_file(res,'resnew-1.json')
 
 
         print(f'Episode {episode + 1}/{num_episodes} completed.')

@@ -154,10 +154,10 @@ def get_random_initial_configuration():
 s3_client = boto3.client('s3')
 lambda_client = boto3.client('lambda')
 logs_client = boto3.client('logs')
-log_group_name = '/aws/lambda/x22203389-ric-resize'
-func_name='x22203389-ric-resize'
+log_group_name ='/aws/lambda/x22203389-ric-rotation'
+func_name='x22203389-ric-rotation'
 
-bucket_name = 'x22203389-imageset'
+bucket_name = 'x22203389-ric'#bucket_name = 'x22203389-imageset'
 folder_path = '51000/'
 s3_objects = helper.get_image_list_from_s3(s3_client,bucket_name,folder_path)
 
