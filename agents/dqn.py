@@ -34,6 +34,13 @@ model_filename = 'dqn_new_model.h5'
 results_file='dqn_results.json'
 q_table_file_path = 'dqn_table.txt'
 target_model_file= 'dqn_new_model.h5'
+
+log_group_name ='/aws/lambda/x22203389-ric-rotation'
+func_name='x22203389-ric-rotation'
+bucket_name = 'x22203389-ric'
+folder_path = '51000/'
+
+#bucket_name = 'x22203389-imageset'
 # Function to save the model
 def save_model(model, filename):
     model.save(filename)
@@ -154,11 +161,7 @@ def get_random_initial_configuration():
 s3_client = boto3.client('s3')
 lambda_client = boto3.client('lambda')
 logs_client = boto3.client('logs')
-log_group_name ='/aws/lambda/x22203389-ric-rotation'
-func_name='x22203389-ric-rotation'
 
-bucket_name = 'x22203389-ric'#bucket_name = 'x22203389-imageset'
-folder_path = '51000/'
 s3_objects = helper.get_image_list_from_s3(s3_client,bucket_name,folder_path)
 
 

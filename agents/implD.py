@@ -13,17 +13,22 @@ timeouts = [1, 2, 3, 5, 10, 15]
 duration_categories = [i for i in range(0, 150001, 500)]  # Define duration categories in milliseconds
 
 Q_shape = (len(memory_sizes) * len(timeouts) * len(duration_categories), 6)
+
+#Configurations
 q_table_file_path = 'q_table-new.npy'
 state_data_path='qstate-new.txt'
 results_file='new_results_q.json'
 
-alpha = 0.1
-gamma = 0.9
+learning_rate = 0.1
+discount_factor = 0.9
 epsilon = 0.01
 num_episodes = 1000
 
 log_group_name ='/aws/lambda/x22203389-ric-rotation'
 func_name='x22203389-ric-rotation'
+bucket_name = 'x22203389-ric'
+folder_path = '51000/'
+
 
 Q = helper.load_q_table(q_table_file_path,Q_shape)
 #print(Q)
@@ -101,8 +106,7 @@ lambda_client = boto3.client('lambda')
 cloudwatch_client = boto3.client('cloudwatch')
 logs_client = boto3.client('logs')
 
-bucket_name = 'x22203389-ric'
-folder_path = '51000/'
+
 s3_objects = helper.get_image_list_from_s3(s3_client,bucket_name,folder_path)
 # Initialize the results dictionary
 results = []
@@ -174,7 +178,7 @@ for episode in range(1,num_episodes):
                 
                 reward = calculate_reward(metrics, new_memory, new_timeout)
                 
-                Q[state, action] = Q[state, action] + alpha * (reward + gamma * np.max(Q[new_state]) - Q[state, action])
+                Q[state, action] = Q[state, action] + learning_rate * (reward + discount_factor * np.max(Q[new_state]) - Q[state, action])
                 
                 memory, timeout = adjust_configuration_based_on_performance(metrics, new_memory, new_timeout)
                 state = new_state
